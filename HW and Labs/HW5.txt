@@ -1,0 +1,75 @@
+$ echo > a
+log_write called from ialloc: 19
+log_write 4
+iupdate being called from create: 19
+log_write called from iupdate: 19
+log_write 4
+bmap called by writei: 1
+log_write called from writei: 1
+log_write 29
+
+This is the sequence of steps that take place for this command (inside the create function) -
+  allocate inode for file a - ialloc (sector 4)
+  update the inode for file a - iupdate (sector 4)
+  add entry of file a in parent directory's data block - dirlink (sector 29)
+
+
+$ echo x > a
+bmap called by writei: 19
+balloc called by bmap: 19
+log_write called from balloc
+log_write 28
+log_write called from bzero
+log_write 426
+log_write called from writei: 19
+log_write 426
+iupdate being called from writei: 19
+log_write called from iupdate: 19
+log_write 4
+bmap called by writei: 19
+log_write called from writei: 19
+log_write 426
+iupdate being called from writei: 19
+log_write called from iupdate: 19
+log_write 4
+
+This is the sequence of steps that take place for this command (echo calls printf which writes to fd character by character, therefore a single character is written to the file at a time):
+write 'x' - writei:
+  bmap (to locate the block):
+    balloc (no block found since file is empty):
+      allocate block and update bitmap block (sector 28)
+      write zeros to the newly allocated block - bzero (sector 426)
+  write character 'x' to block (sector 426)
+  update file size - iupdate (sector 4)
+write '\0' - writei:
+  bmap (to locate the block)
+  write character '\0' to block (sector 426)
+  update file size - iupdate (sector 4)
+
+
+$ rm a
+bmap called by writei: 1
+log_write called from writei: 1
+log_write 29
+iupdate being called from sys_unlink (1): 19
+log_write called from iupdate: 19
+log_write 4
+itrunc being called from iput: 19
+log_write called from bfree
+log_write 28
+iupdate being called from itrunc: 19
+log_write called from iupdate: 19
+log_write 4
+iupdate being called from iput: 19
+log_write called from iupdate: 19
+log_write 4
+
+This is the sequence of steps that take place for the rm function (rm function calls sys_unlink) -
+sys_unlink:
+  remove child link in parent - writei (sector 29)
+  remove link with parent for child - iupdate (sector 4)
+  iput:
+    itrunc:
+      clear bitmap block entry - bfree (sector 28)
+      set file size to 0 - iupdate (sector 4)
+    free inode by setting type to 0 - iupdate (sector 4)

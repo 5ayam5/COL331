@@ -160,6 +160,7 @@ void
 log_write(struct buf *b)
 {
   int i;
+  cprintf("log_write %d\n", b->sector);
 
   if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
     panic("too big a transaction");
