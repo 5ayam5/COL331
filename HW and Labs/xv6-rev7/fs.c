@@ -42,7 +42,6 @@ bzero(int dev, int bno)
   
   bp = bread(dev, bno);
   memset(bp->data, 0, BSIZE);
-  cprintf("log_write called from bzero\n");
   log_write(bp);
   brelse(bp);
 }
@@ -65,7 +64,6 @@ balloc(uint dev)
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
-        cprintf("log_write called from balloc\n");
         log_write(bp);
         brelse(bp);
         bzero(dev, b + bi);
@@ -92,7 +90,6 @@ bfree(int dev, uint b)
   if((bp->data[bi/8] & m) == 0)
     panic("freeing free block");
   bp->data[bi/8] &= ~m;
-  cprintf("log_write called from bfree\n");
   log_write(bp);
   brelse(bp);
 }
@@ -191,7 +188,6 @@ ialloc(uint dev, short type)
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
-      cprintf("log_write called from ialloc: %d\n", inum);
       log_write(bp);   // mark it allocated on the disk
       brelse(bp);
       return iget(dev, inum);
@@ -216,7 +212,6 @@ iupdate(struct inode *ip)
   dip->nlink = ip->nlink;
   dip->size = ip->size;
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
-  cprintf("log_write called from iupdate: %d\n", ip->inum);
   log_write(bp);
   brelse(bp);
 }
@@ -329,10 +324,8 @@ iput(struct inode *ip)
       panic("iput busy");
     ip->flags |= I_BUSY;
     release(&icache.lock);
-    cprintf("itrunc being called from iput: %d\n", ip->inum);
     itrunc(ip);
     ip->type = 0;
-    cprintf("iupdate being called from iput: %d\n", ip->inum);
     iupdate(ip);
     acquire(&icache.lock);
     ip->flags = 0;
@@ -367,26 +360,20 @@ bmap(struct inode *ip, uint bn)
   struct buf *bp;
 
   if(bn < NDIRECT){
-    if((addr = ip->addrs[bn]) == 0) {
-      cprintf("balloc called by bmap: %d\n", ip->inum);
+    if((addr = ip->addrs[bn]) == 0)
       ip->addrs[bn] = addr = balloc(ip->dev);
-    }
     return addr;
   }
   bn -= NDIRECT;
 
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
-    if((addr = ip->addrs[NDIRECT]) == 0) {
-      cprintf("balloc called by bmap (1): %d\n", ip->inum);
+    if((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
-    }
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
-      cprintf("balloc called by bmap (2): %d\n", ip->inum);
       a[bn] = addr = balloc(ip->dev);
-      cprintf("log_write called from bmap: %d\n", ip->inum);
       log_write(bp);
     }
     brelse(bp);
@@ -428,7 +415,6 @@ itrunc(struct inode *ip)
   }
 
   ip->size = 0;
-  cprintf("iupdate being called from itrunc: %d\n", ip->inum);
   iupdate(ip);
 }
 
@@ -491,18 +477,15 @@ writei(struct inode *ip, char *src, uint off, uint n)
     return -1;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
-    cprintf("bmap called by writei: %d\n", ip->inum);
     bp = bread(ip->dev, bmap(ip, off/BSIZE));
     m = min(n - tot, BSIZE - off%BSIZE);
-    memmove(bp->data + off % BSIZE, src, m);
-    cprintf("log_write called from writei: %d\n", ip->inum);
+    memmove(bp->data + off%BSIZE, src, m);
     log_write(bp);
     brelse(bp);
   }
 
   if(n > 0 && off > ip->size){
     ip->size = off;
-    cprintf("iupdate being called from writei: %d\n", ip->inum);
     iupdate(ip);
   }
   return n;
